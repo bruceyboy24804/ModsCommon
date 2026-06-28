@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ModsCommon.targets — shared MSBuild build steps for CS2 mods.
+
+  Imported by each consuming mod alongside the CSII Mod.targets (which provides DeployWIP,
+  ModPublisherConfig, ModPostProcessorConfig and the related properties these targets hook).
+  All paths resolve against the consuming mod via $(ProjectDir) / $(DeployDir) / $(Version).
+-->
+<Project>
+
+	<!--Build UI-->
+	<Target Name="BuildUI" AfterTargets="DeployWIP">
+		<Message Text="[BuildUI]" Importance="high" />
+		<Exec Command="npm run build" WorkingDirectory="$(ProjectDir)/UI" />
+	</Target>
+
+	<!--Copy Assets-->
+	<Target Name="CopyIcons" AfterTargets="DeployWIP">
+		<Message Text="[CopyIcons]" Importance="high" />
+		<ItemGroup>
+			<_AssetsDir Include="$(ProjectDir)/Assets/**/*.*" />
+		</ItemGroup>
+		<Copy SourceFiles="@(_AssetsDir)" DestinationFolder="$(DeployDir)/Assets/%(RecursiveDir)" />
+	</Target>
+
+	<!--Override ModPostProcessorArgs to disable Mac/Linux for speed-->
+	<Target Name="CustomModPostProcessorConfig" AfterTargets="ModPostProcessorConfig">
+		<PropertyGroup>
+			<ModPostProcessorArgs>"$(ModPostProcessorFullPath)" PostProcess "$(TargetPath)" -u "$(UnityModProjectFullPath)" @(ReferencePath->'-r "%(Identity)"', ' ') -p Windows -d -v</ModPostProcessorArgs>
+		</PropertyGroup>
+	</Target>
+
+	<!--Custom Build step to assemble the PublishConfiguration.xml.
+	    Skips gracefully if the mod hasn't adopted the template-based flow (no .template.xml),
+	    leaving any static Properties\PublishConfiguration.xml untouched.-->
+	<Target Name="GeneratePublishConfiguration" AfterTargets="ModPublisherConfig"
+	        Condition="Exists('$(ProjectDir)Properties\PublishConfiguration.template.xml')">
+		<PropertyGroup>
+			<TargetConfigXml>$(ProjectDir)Properties\PublishConfiguration.xml</TargetConfigXml>
+			<ModVersion>$(Version)</ModVersion>
+			<LongDescFile>$(ProjectDir)Properties\LongDescription.md</LongDescFile>
+			<ChangelogFile>$(ProjectDir)Properties\Changelog\$(ModVersion).md</ChangelogFile>
+		</PropertyGroup>
+
+		<PropertyGroup>
+			<LongDescText Condition="Exists('$(LongDescFile)')">$([System.IO.File]::ReadAllText('$(LongDescFile)'))</LongDescText>
+			<ChangelogText Condition="Exists('$(ChangelogFile)')">$([System.IO.File]::ReadAllText('$(ChangelogFile)'))</ChangelogText>
+		</PropertyGroup>
+
+		<Copy SourceFiles="$(ProjectDir)Properties/PublishConfiguration.template.xml" DestinationFiles="$(TargetConfigXml)" />
+
+		<XmlPoke XmlInputPath="$(TargetConfigXml)" Query="/Publish/ModVersion/@Value" Value="$(ModVersion)" />
+		<XmlPoke XmlInputPath="$(TargetConfigXml)" Query="/Publish/LongDescription" Value="$(LongDescText)" />
+		<XmlPoke XmlInputPath="$(TargetConfigXml)" Query="/Publish/ChangeLog" Value="$(ChangelogText)" />
+
+		<Message Text="Updated $(TargetConfigXml) with Version $(ModVersion)" Importance="High" />
+	</Target>
+
+</Project>

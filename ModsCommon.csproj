@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+	  Standalone compile-check for the shared sources.
+
+	  The mods do NOT consume this project. Under source inclusion each mod imports
+	  ModsCommon.props and compiles the shared .cs via a <Compile Include="Common\**\*.cs">
+	  glob into its own assembly. Build this project on its own to validate the common code in
+	  isolation (e.g. in CI). Shared build config lives in ModsCommon.props /
+	  ModsCommon.targets.
+	-->
+	<PropertyGroup>
+		<TargetFramework>net48</TargetFramework>
+		<Title>ModsCommon</Title>
+		<AssemblyTitle>$(Title)</AssemblyTitle>
+		<Description>Common library for Cities: Skylines 2 mods.</Description>
+		<Authors>Bruceyboy24804</Authors>
+		<Product>$(Title)</Product>
+	</PropertyGroup>
+
+	<!--Imports must be after PropertyGroup block-->
+	<Import Project="ModsCommon.props" />
+	<Import Project="$([System.Environment]::GetEnvironmentVariable('CSII_TOOLPATH', 'EnvironmentVariableTarget.User'))\Mod.props" />
+
+</Project>
