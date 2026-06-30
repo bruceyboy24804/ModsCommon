@@ -83,9 +83,9 @@ namespace ModsCommon.Systems {
         /// <summary>
         /// Creates a two-way binding: a value binding (C# -&gt; UI) plus a trigger (UI -&gt; C#) keyed by
         /// <paramref name="setterKey"/>. Pass <paramref name="updateCallBack"/> to react to UI-driven changes.
-        /// Use the same value for <paramref name="key"/> and <paramref name="setterKey"/> for a shared key.
+        /// Use the single-key overload when the binding and trigger should share one key.
         /// </summary>
-        public ValueBindingHelper<T> CreateBinding<T>(string key, string setterKey, T initialValue, Action<T>? updateCallBack = null, bool? autoUpdate = null)
+        public ValueBindingHelper<T> CreateGenericBinding<T>(string key, string setterKey, T initialValue, Action<T> updateCallBack = null, bool? autoUpdate = null)
         {
             var bindingKey = GetBindingKey(key);
             var triggerKey = GetTriggerKey(setterKey);
@@ -108,7 +108,7 @@ namespace ModsCommon.Systems {
         /// Creates a two-way binding that shares a single <paramref name="key"/> for both the value binding
         /// and the trigger; the <c>BINDING:</c> / <c>TRIGGER:</c> prefixes keep the two keys distinct.
         /// </summary>
-        public ValueBindingHelper<T> CreateBinding<T>(string key, T initialValue, Action<T> updateCallBack, bool? autoUpdate = null)
+        public ValueBindingHelper<T> CreateGenericBinding<T>(string key, T initialValue, Action<T> updateCallBack, bool? autoUpdate = null)
         {
             var bindingKey = GetBindingKey(key);
             var triggerKey = GetTriggerKey(key);
@@ -131,7 +131,7 @@ namespace ModsCommon.Systems {
         /// Creates a two-way binding with a custom <paramref name="customWriter"/> / <paramref name="customReader"/>,
         /// using <paramref name="key"/> as both the binding key and the trigger (setter) key.
         /// </summary>
-        public ValueBindingHelper<T> CreateBinding<T>(string key, T initialValue, IWriter<T> customWriter, IReader<T> customReader, Action<T> updateCallBack = null, bool? autoUpdate = null)
+        public ValueBindingHelper<T> CreateCustomBinding<T>(string key, T initialValue, IWriter<T> customWriter, IReader<T> customReader, Action<T> updateCallBack = null, bool? autoUpdate = null)
         {
             var bindingKey = GetBindingKey(key);
             var triggerKey = GetTriggerKey(key);
@@ -154,7 +154,7 @@ namespace ModsCommon.Systems {
         /// Creates a two-way binding with a custom <paramref name="customWriter"/> / <paramref name="customReader"/>,
         /// using a separate <paramref name="setterKey"/> for the trigger so the binding and trigger keys can differ.
         /// </summary>
-        public ValueBindingHelper<T> CreateBinding<T>(string key, string setterKey, T initialValue, IWriter<T> customWriter, IReader<T> customReader, Action<T> updateCallBack = null, bool? autoUpdate = null)
+        public ValueBindingHelper<T> CreateCustomBinding<T>(string key, string setterKey, T initialValue, IWriter<T> customWriter, IReader<T> customReader, Action<T> updateCallBack = null, bool? autoUpdate = null)
         {
             var bindingKey = GetBindingKey(key);
             var triggerKey = GetTriggerKey(setterKey);
