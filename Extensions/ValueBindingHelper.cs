@@ -3,33 +3,48 @@ namespace ModsCommon.Extensions {
     using Colossal.UI.Binding;
 
     public class ValueBindingHelper<T> {
-        public ValueBinding<T> Binding {
-            get;
+        private readonly Action<T>? _updateCallBack;
+        private T? _valueToUpdate;
+        private bool _dirty;
+
+        public ValueBinding<T?> Binding { get; }
+
+        public T? Value
+        {
+            get => _dirty ? _valueToUpdate : Binding.value;
+            set
+            {
+                _dirty = true;
+                _valueToUpdate = value;
+            }
         }
 
-        public T Value {
-            get => Binding.value; set => Binding.Update(value);
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="ValueBindingHelper{T}"/> class.
-        /// </summary>
-        /// <param name="binding"></param>
-        /// <param name="updateCallBack"></param>
-        public ValueBindingHelper(ValueBinding<T> binding, Action<T> updateCallBack = null) {
+        public ValueBindingHelper(ValueBinding<T?> binding, Action<T>? updateCallBack = null)
+        {
             Binding = binding;
             _updateCallBack = updateCallBack;
         }
 
-        public void UpdateCallback(T value) {
-            Binding.Update(value);
+        public void ForceUpdate()
+        {
+            if (_dirty)
+            {
+                Binding.Update(_valueToUpdate);
+
+                _dirty = false;
+            }
+        }
+
+        public void UpdateCallback(T value)
+        {
+            Value = value;
+
             _updateCallBack?.Invoke(value);
         }
 
-        public static implicit operator T(ValueBindingHelper<T> helper) {
-            return helper.Binding.value;
+        public static implicit operator T?(ValueBindingHelper<T> helper)
+        {
+            return helper.Value;
         }
-
-        private readonly Action<T> _updateCallBack;
     }
 }
