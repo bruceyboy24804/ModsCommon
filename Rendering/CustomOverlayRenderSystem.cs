@@ -75,6 +75,19 @@ namespace ModsCommon.Rendering {
         private EntityQuery   m_SettingsQuery;
         private TerrainSystem m_TerrainSystem;
 
+        /// <summary>
+        /// Per-filler arbitrary-mesh draws (a filled polygon, unique vertices/triangles every time) — not
+        /// GPU-instanced like <see cref="m_CustomMeshes"/>/<see cref="CustomMeshType"/>, which assumes every
+        /// instance of a type shares identical geometry. A plain managed list (not a <see cref="NativeList{T}"/>)
+        /// since <see cref="Mesh"/>/<see cref="MaterialPropertyBlock"/> are managed objects and nothing calls
+        /// this from a Burst job — every draw call here is already invoked synchronously from a tool's own
+        /// render step, same as the rest of this system's API.
+        /// </summary>
+        private readonly List<(Mesh mesh, Color color)> m_FilledMeshDraws = new List<(Mesh, Color)>();
+        private Material           m_FilledMeshMaterial;
+        private MaterialPropertyBlock m_FilledMeshPropertyBlock;
+        private int m_UnlitColorId;
+
         protected override void OnCreate() {
             base.OnCreate();
             m_RenderingSystem = World.GetOrCreateSystemManaged<RenderingSystem>();
@@ -83,6 +96,7 @@ namespace ModsCommon.Rendering {
             m_SettingsQuery = GetEntityQuery(ComponentType.ReadOnly<OverlayConfigurationData>());
             m_CurveBufferID = Shader.PropertyToID("colossal_OverlayCurveBuffer");
             m_CustomMeshBufferID = Shader.PropertyToID("colossal_OverlayCustomMeshBuffer");
+            m_UnlitColorId = Shader.PropertyToID("_UnlitColor");
             RenderPipelineManager.beginContextRendering += Render;
         }
 
@@ -109,6 +123,10 @@ namespace ModsCommon.Rendering {
 
             if (m_AbsoluteMaterial != null) {
                 UnityEngine.Object.Destroy(m_AbsoluteMaterial);
+            }
+
+            if (m_FilledMeshMaterial != null) {
+                UnityEngine.Object.Destroy(m_FilledMeshMaterial);
             }
 
             foreach (var material in m_CustomMeshMaterial) {
@@ -356,7 +374,40 @@ namespace ModsCommon.Rendering {
                         }
                     }
                 }
+
+                if (m_FilledMeshDraws.Count > 0) {
+                    if (m_FilledMeshMaterial == null) {
+                        m_FilledMeshMaterial = new Material(Shader.Find("HDRP/Unlit"));
+                    }
+
+                    if (m_FilledMeshPropertyBlock == null) {
+                        m_FilledMeshPropertyBlock = new MaterialPropertyBlock();
+                    }
+
+                    foreach (var camera in cameras) {
+                        if (camera.cameraType == CameraType.Game || camera.cameraType == CameraType.SceneView) {
+                            foreach (var (mesh, color) in m_FilledMeshDraws) {
+                                m_FilledMeshPropertyBlock.SetColor(m_UnlitColorId, color);
+                                Graphics.DrawMesh(mesh, Matrix4x4.identity, m_FilledMeshMaterial, 0, camera, 0, m_FilledMeshPropertyBlock);
+                            }
+                        }
+                    }
+
+                    m_FilledMeshDraws.Clear();
+                }
             }
+        }
+
+        /// <summary>
+        /// Queues a solid-color draw of an arbitrary, unique-per-call mesh (e.g. a filler's own
+        /// triangulated polygon) — not part of <see cref="Buffer"/>/<see cref="GetBuffer"/> since it has no
+        /// job-safety requirement, unlike every other draw call here. Called directly and synchronously,
+        /// same as this system's other draw calls are in practice (nothing in this project schedules them
+        /// from a Burst job). <paramref name="mesh"/>'s vertices must already be in world space — drawn at
+        /// <see cref="Matrix4x4.identity"/>.
+        /// </summary>
+        public void DrawFilledMesh(Mesh mesh, Color color) {
+            m_FilledMeshDraws.Add((mesh, color));
         }
 
         public Buffer GetBuffer(out JobHandle dependencies) {

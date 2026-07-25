@@ -14,13 +14,12 @@ namespace ModsCommon.Trajectory {
     /// implements the same closest-point/cut/divide/length algorithms CS1 ModsCommon hand-rolled.
     /// </summary>
     /// <remarks>
-    /// This type intentionally ships only the plain <see cref="Bezier4x3"/>-wrapping constructor. CS1's
-    /// <c>BezierTrajectory</c> also had a constructor that fit a curve's control points to a
-    /// start/end position + tangent pair (tuned around <c>NetSegment.IsStraight</c> heuristics) — that
-    /// belongs in the domain-model phase, where it can be built and validated against real
-    /// <c>Game.Net</c> edge/node geometry instead of invented speculatively here. <see cref="Shift"/> and
-    /// <see cref="Elevate(float, float)"/> below use a control-point-offset approximation in the
-    /// meantime (see their remarks).
+    /// <see cref="Shift"/> and <see cref="Elevate(float, float)"/> below use a control-point-offset
+    /// approximation rather than an exact parallel-curve reconstruction (see their remarks) — that part of
+    /// CS1's tangent-fit machinery is still deferred. <see cref="Fit"/>, however, is a real port: see its
+    /// own remarks for why <c>Game.Net.NetUtils.FitCurve</c> (the vanilla-road curve fit this project
+    /// initially reused for marking-point-to-marking-point lines, e.g. <c>IMT_RegularLine</c>) turned out
+    /// to be the wrong tool for that job.
     /// </remarks>
     public readonly struct BezierTrajectory : ITrajectory, IEquatable<BezierTrajectory> {
         public TrajectoryType TrajectoryType => TrajectoryType.Bezier;
@@ -128,6 +127,83 @@ namespace ModsCommon.Trajectory {
         }
 
         public override string ToString() => $"Bezier: {StartPosition} - {EndPosition}";
+
+        /// <summary>
+        /// Fraction of the (capped) combined tangent-intersection length a control point is allowed to
+        /// travel — CS1 ModsCommon's <c>BezierTrajectory.curveT</c>. Ported verbatim (see <see cref="Fit"/>).
+        /// </summary>
+        public const float FitCurveT = 0.3f;
+
+        /// <summary>
+        /// Fits a cubic Bezier between two positions given each end's tangent direction — a faithful port
+        /// of CS1 ModsCommon's <c>BezierTrajectory.GetMiddleDistance</c>/<c>GetMiddlePoints</c> (the real
+        /// algorithm CS1's <c>MarkingRegularLine.CalculateTrajectory</c> actually uses for a node marking;
+        /// it never calls anything like <c>NetUtils.FitCurve</c>).
+        /// </summary>
+        /// <remarks>
+        /// Not the same algorithm as <c>Game.Net.NetUtils.FitCurve</c>, which this project initially reused
+        /// here (<c>IMT_RegularLine</c>) on the assumption that "vanilla road curve fit" was a reasonable
+        /// stand-in for "curve fit between two marking points." It isn't: <c>NetUtils.FitCurve</c> lets a
+        /// control point travel up to the full chord distance along its tangent when the two tangents'
+        /// alignment pushes that way, which is fine for real road corners (where both tangents are already
+        /// road-aligned and point toward a sensible curve) but produces a sharply overshooting/kinked curve
+        /// when the two points' tangents are only incidentally related (e.g. one along a road, one along a
+        /// crosswalk) — confirmed by decompiling <c>Game.Net.NetUtils.FitCurve</c> and comparing against
+        /// this method's real source. The fix is this method's <c>min(intersectionDistance, combinedLength *
+        /// <see cref="FitCurveT"/>)</c> cap on each control point, which CS1 always applies and
+        /// <c>NetUtils.FitCurve</c> never does. This is also the same root cause flagged (but never
+        /// diagnosed) as the Phase 3 connector-curve "overshoot past the real corner" artifact, since
+        /// <c>IMT_MarkingBuilder.BuildConnector</c> uses the identical <c>NetUtils.FitCurve</c> shape — not
+        /// switched over yet, since that curve feeds the intersection contour (normal-point raycasting,
+        /// filler contour) and deserves its own verification pass rather than riding along with this fix.
+        ///
+        /// Simplified from CS1 in one place: CS1 special-cases a <c>NetSegment.IsStraight</c> fast path
+        /// (proportional placement at a smaller <c>straightT = 0.15f</c>, no tangent-intersection at all) for
+        /// genuinely straight real road segments — CS2's <c>NetSegment</c> has no equivalent public check to
+        /// call, and "is this a real straight road segment" isn't a meaningful question for two arbitrary
+        /// marking points anyway. This always takes CS1's general (non-straight) branch, at
+        /// <see cref="FitCurveT"/> for both ends — CS1's own fallback for "tangents nearly anti-parallel or
+        /// don't intersect" (proportional placement, no cap) already reduces to the same shape for the
+        /// genuinely-straight case.
+        /// </remarks>
+        public static BezierTrajectory Fit(float3 startPos, float3 startDir, float3 endPos, float3 endDir, float startT = FitCurveT, float endT = FitCurveT) {
+            var normalizedStart = math.normalizesafe(startDir);
+            var normalizedEnd = math.normalizesafe(endDir);
+            var chord = math.distance(startPos, endPos);
+            var dot = normalizedStart.x * normalizedEnd.x + normalizedStart.z * normalizedEnd.z;
+
+            float startDis;
+            float endDis;
+
+            if (dot >= -0.999f && TryIntersectXZ(startPos, normalizedStart, endPos, normalizedEnd, out var u, out var v)) {
+                u = math.clamp(u, chord * 0.1f, chord);
+                v = math.clamp(v, chord * 0.1f, chord);
+                var combined = u + v;
+                startDis = math.min(u, combined * startT);
+                endDis = math.min(v, combined * endT);
+            } else {
+                startDis = chord * startT;
+                endDis = chord * endT;
+            }
+
+            var bezier = new Bezier4x3(startPos, startPos + normalizedStart * startDis, endPos + normalizedEnd * endDis, endPos);
+            return new BezierTrajectory(bezier);
+        }
+
+        /// <summary>Solves <c>p1 + u*d1 == p2 + v*d2</c> for <c>u</c>/<c>v</c> in the XZ plane — CS1's <c>Line2.Intersect</c>, ported. <paramref name="d1"/>/<paramref name="d2"/> must be unit vectors so <c>u</c>/<c>v</c> come out as real-world distances.</summary>
+        private static bool TryIntersectXZ(float3 p1, float3 d1, float3 p2, float3 d2, out float u, out float v) {
+            var denom = d1.x * d2.z - d1.z * d2.x;
+            if (math.abs(denom) < 1e-6f) {
+                u = 0f;
+                v = 0f;
+                return false;
+            }
+
+            var diff = p2 - p1;
+            u = (diff.x * d2.z - diff.z * d2.x) / denom;
+            v = (diff.x * d1.z - diff.z * d1.x) / denom;
+            return true;
+        }
 
         public static implicit operator Bezier4x3(BezierTrajectory trajectory) => trajectory.Trajectory;
         public static explicit operator BezierTrajectory(Bezier4x3 bezier) => new BezierTrajectory(bezier);

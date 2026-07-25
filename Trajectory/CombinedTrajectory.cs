@@ -188,8 +188,28 @@ namespace ModsCommon.Trajectory {
 
         public float Travel(float distance) => Travel(0f, distance);
 
+        /// <summary>
+        /// Phase 18 bugfix — this previously ignored <paramref name="start"/> entirely (always walked from
+        /// <c>Trajectories[0]</c>, treating <paramref name="distance"/> as measured from the combined
+        /// trajectory's own beginning regardless of where the caller actually asked to start). Every other
+        /// caller of this class happened to only ever pass <c>start = 0</c> before Phase 18 — the first
+        /// caller to dash-decompose a real multi-part guide (<c>IMT_StyleHelper.CalculateDashed</c>'s
+        /// relaxation loop, called on a <see cref="IMT_GuideFillerStyle"/> guide) passes a non-zero,
+        /// continuously-advancing <c>start</c> every iteration, and the ignored parameter meant the walked
+        /// position could never advance past the first part — an infinite loop (caught in-game as an
+        /// <c>OutOfMemoryException</c> from an unbounded <c>List&lt;ITrajectory&gt;</c>, not a hang).
+        /// </summary>
         public float Travel(float start, float distance) {
-            for (var i = 0; i < Count; i += 1) {
+            var localStart = ToPartT(start, out var startI);
+            var remainingInPart = Trajectories[startI].Distance(localStart, 1f);
+
+            if (remainingInPart >= distance) {
+                return FromPartT(startI, Trajectories[startI].Travel(localStart, distance));
+            }
+
+            distance -= remainingInPart;
+
+            for (var i = startI + 1; i < Count; i += 1) {
                 var length = Trajectories[i].Length;
                 if (length <= distance) {
                     distance -= length;

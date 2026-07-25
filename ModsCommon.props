@@ -75,6 +75,11 @@
 		<Reference Include="Colossal.Mathematics">
 			<Private>false</Private>
 		</Reference>
+		<!-- Colossal.PSI.Environment.EnvPath: the canonical user-data/game-data/temp path constants
+		     (kUserDataPath etc.), for anything writing files outside the save. -->
+		<Reference Include="Colossal.PSI.Common">
+			<Private>false</Private>
+		</Reference>
 		<Reference Include="Unity.InputSystem">
 			<Private>false</Private>
 		</Reference>

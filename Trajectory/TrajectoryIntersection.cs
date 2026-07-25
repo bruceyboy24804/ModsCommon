@@ -6,6 +6,7 @@ namespace ModsCommon.Trajectory {
     using System.Linq;
     using Colossal.Mathematics;
     using Unity.Mathematics;
+    using UnityEngine;
 
     #endregion
 
@@ -331,14 +332,48 @@ namespace ModsCommon.Trajectory {
         public static bool IsCorrectT(float t) => t is >= 0f and <= 1f;
         public static bool IsCorrectT(in StraightTrajectory line, float t) => (line.StartLimited ? 0f : float.MinValue) <= t && t <= (line.EndLimited ? 1f : float.MaxValue);
 
-        /// <remarks>
-        /// CS1 ModsCommon also had bounding-box quick-reject overloads of <c>CanIntersect</c> (against a
-        /// <c>Rect</c>, a point array, or a bezier's control hull) used by its <c>Contour</c>
-        /// class to skip full intersection tests for trajectories that obviously can't cross. Deferred to
-        /// the domain-model phase, where a real contour/bounding type exists to test against — the core
-        /// <see cref="Calculate(ITrajectory, ITrajectory)"/> algorithm above works correctly without it,
-        /// just without that early-out optimization.
-        /// </remarks>
+        /// <summary>
+        /// Phase 18 — bounding-box quick-reject: true iff at least one of <paramref name="limits"/>' four
+        /// corners sits on the opposite side of <paramref name="line"/> from the others, i.e. the line
+        /// might cross the box (not a precise test, just an early-out). Ported from CS1 ModsCommon's own
+        /// <c>Intersects.CanIntersect</c> (found in the separate ModsCommon repo, not NodeMarkup's own —
+        /// <c>TrajectoryShared/Intersects.cs</c> at the pinned commit).
+        /// </summary>
+        public static bool CanIntersect(Rect limits, in StraightTrajectory line, out Side side) {
+            var dir = line.Direction.Turn90(true);
+            var pos = line.StartPosition;
+
+            side = GetSide(pos.x, pos.z, dir.x, dir.z, limits.xMin, limits.yMin);
+
+            if (GetSide(pos.x, pos.z, dir.x, dir.z, limits.xMin, limits.yMax) != side) {
+                return true;
+            }
+            if (GetSide(pos.x, pos.z, dir.x, dir.z, limits.xMax, limits.yMin) != side) {
+                return true;
+            }
+            return GetSide(pos.x, pos.z, dir.x, dir.z, limits.xMax, limits.yMax) != side;
+        }
+
+        /// <summary>Phase 18 — same idea as the <see cref="Rect"/> overload, against an arbitrary set of reference points (e.g. a contour's flattened vertex list) instead of a box.</summary>
+        public static bool CanIntersect(float3[] points, in StraightTrajectory line, out Side side) {
+            var dir = line.Direction.Turn90(true);
+            var pos = line.StartPosition;
+
+            if (points.Length == 0) {
+                side = default;
+                return false;
+            }
+
+            side = GetSide(pos.x, pos.z, dir.x, dir.z, points[0].x, points[0].z);
+            for (var i = 1; i < points.Length; i++) {
+                if (GetSide(pos.x, pos.z, dir.x, dir.z, points[i].x, points[i].z) != side) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public static Side GetSide(float posX, float posZ, float dirX, float dirZ, float pointX, float pointZ)
             => dirX * (pointX - posX) + dirZ * (pointZ - posZ) >= 0f ? Side.Right : Side.Left;
 
