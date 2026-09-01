@@ -196,6 +196,7 @@ namespace ModsCommon.Mod {
             // Initialize shared utilities.
             PrefixedLogger.DefaultLog = Log;
             ReflectionExtensions.Initialize(Log);
+            LocaleHelper.Initialize(ModName);
 
             // Initialize Settings.
             Settings = CreateSettings(Instance);

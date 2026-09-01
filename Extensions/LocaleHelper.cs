@@ -5,12 +5,25 @@ using System.Text;
 using Colossal;
 using Colossal.Json;
 using Game.SceneFlow;
+using Game.UI.Localization;
+using Game.UI.Tooltip;
 
 namespace ModsCommon.Extensions
 {
     public class LocaleHelper
 	{
 		private readonly Dictionary<string, Dictionary<string, string>> _locale;
+
+		private static string? s_ModName;
+
+		/// <summary>
+		/// The mod name used to build localisation keys for the tooltip and action helpers.
+		/// Set once per mod (e.g. <c>=&gt; LocaleHelper.Initialize(MyMod.Instance.ModName)</c>);
+		/// <see cref="ModsCommon.Mod.ModsCommonBase{TSelf}"/> does this during OnLoad.
+		/// </summary>
+		public static void Initialize(string modName) => s_ModName = modName;
+
+		private static string ModName => s_ModName ?? string.Empty;
 
 		private static readonly string[] _supportedLocales =
 		[
@@ -68,6 +81,42 @@ namespace ModsCommon.Extensions
 			}
 
 			return fallback ?? id;
+		}
+
+		/// <summary>
+		/// Looks up a tooltip label registered as <c>Tooltip.LABEL[{ModName}.{key}]</c>.
+		/// </summary>
+		public static string? GetTooltip(string key)
+		{
+			return Translate($"Tooltip.LABEL[{ModName}.{key}]");
+		}
+
+		/// <summary>
+		/// Looks up the mod's own input action label,
+		/// registered as <c>Common.ACTION[{ModName}.{ModName}.Mod/{key}]</c>.
+		/// </summary>
+		public static string? GetAction(string key)
+		{
+			return Translate($"Common.ACTION[{ModName}.{ModName}.Mod/{key}]");
+		}
+
+		/// <summary>
+		/// Looks up a hint-tooltip action label,
+		/// registered as <c>Common.ACTION[{ModName}.HintTooltip.{type}/{key}]</c>.
+		/// </summary>
+		public static string? GetAction(string type, string key)
+		{
+			return Translate($"Common.ACTION[{ModName}.HintTooltip.{type}/{key}]");
+		}
+
+		/// <summary>
+		/// Builds a <see cref="StringTooltip"/> bound to <c>Tooltip.LABEL[{ModName}.{key}]</c>,
+		/// so the game resolves the text against the active locale rather than a captured string.
+		/// </summary>
+		public static StringTooltip GetTooltipWithIcon(string key, string? icon = null)
+		{
+			var path = $"Tooltip.LABEL[{ModName}.{key}]";
+			return new StringTooltip { path = path, icon = icon, value = LocalizedString.Id(path) };
 		}
 
 
