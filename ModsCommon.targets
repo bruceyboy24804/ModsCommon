@@ -8,6 +8,20 @@
 -->
 <Project>
 
+	<!--
+	  The shared language version.
+
+	  It is set HERE rather than in ModsCommon.props because the props file is imported before the
+	  CSII Mod.props, which pins LangVersion to 9.0 — so a value set there is overwritten and quietly
+	  does nothing. This file is imported after Mod.targets, so it wins.
+
+	  12.0 because the shared extensions use collection expressions. Raising it only permits more
+	  syntax, so it cannot break a consumer that was compiling before.
+	-->
+	<PropertyGroup>
+		<LangVersion>12.0</LangVersion>
+	</PropertyGroup>
+
 	<!--Build UI-->
 	<Target Name="BuildUI" AfterTargets="DeployWIP">
 		<Message Text="[BuildUI]" Importance="high" />

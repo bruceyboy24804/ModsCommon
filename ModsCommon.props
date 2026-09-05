@@ -12,7 +12,10 @@
 <Project>
 
 	<PropertyGroup>
-		<LangVersion>11.0</LangVersion>
+		<!-- LangVersion is NOT set here. This file is imported BEFORE the CSII Mod.props, which sets
+		     LangVersion to 9.0, so anything set here is overwritten and the setting silently does
+		     nothing. It lives in ModsCommon.targets instead, which consumers import after the
+		     toolchain's — the same ordering rule CustomModPostProcessorConfig already depends on. -->
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<Configurations>Debug;Release;I18N</Configurations>
 		<DebugType>portable</DebugType>
