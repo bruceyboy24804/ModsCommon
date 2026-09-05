@@ -251,8 +251,20 @@ namespace ModsCommon.Rendering {
             }
         }
 
+        /// <summary>
+        /// When true, drawing continues even while <c>RenderingSystem.hideOverlay</c> is set.
+        /// </summary>
+        /// <remarks>
+        /// Opt-in, and off by default so existing callers keep vanilla's behaviour. It exists because
+        /// photo mode suppresses overlay rendering: a shot-composition aid that cannot be seen while
+        /// composing the shot is useless, and there is no other seam to draw through. Anything that
+        /// sets this takes on the job of hiding itself when it should not be in frame — the hide-UI
+        /// toggle no longer does it for you.
+        /// </remarks>
+        public bool IgnoreHideOverlay { get; set; }
+
         private void Render(ScriptableRenderContext context, List<Camera> cameras) {
-            if (!m_RenderingSystem.hideOverlay) {
+            if (!m_RenderingSystem.hideOverlay || IgnoreHideOverlay) {
                 var num = 0;
                 if (m_ProjectedInstanceCount != 0) {
                     num += 5;

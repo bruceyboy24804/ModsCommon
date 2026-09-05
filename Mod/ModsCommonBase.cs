@@ -285,8 +285,18 @@ namespace ModsCommon.Mod {
             }
 
             var assemblyPath = Path.GetDirectoryName(modAsset.GetMeta().path);
-            m_Log.Debug($"RegisterAssets() -- Registering assets from {assemblyPath}/Assets/ to {UiHostPrefix}");
-            UIManager.defaultUISystem.AddHostLocation(UiHostPrefix, assemblyPath + "/Assets/");
+            var assetsPath   = assemblyPath + "/Assets/";
+
+            // AddHostLocation starts a file watcher on the directory, so pointing it at one that does
+            // not exist throws an ArgumentException the game logs as a red error with a full stack
+            // trace on every launch. A mod that ships no assets is a normal state, not a fault.
+            if (!Directory.Exists(assetsPath)) {
+                m_Log.Debug($"RegisterAssets() -- No assets directory at {assetsPath}, nothing to host.");
+                return;
+            }
+
+            m_Log.Debug($"RegisterAssets() -- Registering assets from {assetsPath} to {UiHostPrefix}");
+            UIManager.defaultUISystem.AddHostLocation(UiHostPrefix, assetsPath);
         }
 
         private void AddTests() {
